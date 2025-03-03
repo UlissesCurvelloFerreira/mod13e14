@@ -1,97 +1,81 @@
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
-# Carregar os dados do arquivo 'automovel.xlsx'
-df = pd.read_excel('automovel2.xlsx')
+# Criando dados fictícios
+dados = {
+    "Combustivel": ["Gasolina", "Diesel", "Etanol", "Gasolina", "Diesel", "Etanol", "Gasolina", "Diesel", "Etanol", "Gasolina"],
+    "Idade": [5, 3, 8, 2, 7, 1, 4, 6, 9, 2],
+    "Quilometragem": [50000, 30000, 80000, 20000, 70000, 10000, 40000, 60000, 90000, 25000],
+    "Preco": [30000, 35000, 20000, 40000, 22000, 45000, 32000, 25000, 18000, 42000]
+}
 
-# Separando as variáveis independentes (X) e a variável dependente (y)
-X = df[['Categoria', 'Idade', 'Quilometragem']]
-y = df['Preco']
+df = pd.DataFrame(dados)
 
-# Dividir os dados em conjunto de treinamento e teste
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Separando variáveis independentes e dependente
+X = df.drop(columns=["Preco"])
+y = df["Preco"]
 
-# Definir o pré-processamento para dados numéricos e categóricos
-numeric_features = ['Idade', 'Quilometragem']
-categorical_features = ['Categoria']
+# Definição das colunas categóricas e numéricas
+colunas_categoricas = ["Combustivel"]
+colunas_numericas = ["Idade", "Quilometragem"]
 
-# Transformações: StandardScaler para numéricos e OneHotEncoder para categóricos
-preprocessor = ColumnTransformer(
+# Criando transformações (pipeline sendo usado)
+transformador_categorico = OneHotEncoder(handle_unknown="ignore")
+transformador_numerico = StandardScaler()
+
+# Aplicando transformações às colunas apropriadas
+preprocessador = ColumnTransformer(
     transformers=[
-        ('num', StandardScaler(), numeric_features),
-        ('cat', OneHotEncoder(), categorical_features)
-    ])
+        ("cat", transformador_categorico, colunas_categoricas),
+        ("num", transformador_numerico, colunas_numericas)
+    ]
+)
 
-# Criar o pipeline com o pré-processamento e o modelo de regressão linear
-pipeline = Pipeline(steps=[
-    ('preprocessor', preprocessor),
-    ('model', LinearRegression())
+# Criando o pipeline
+pipeline = Pipeline([
+    ("preprocessador", preprocessador),
+    ("modelo", LinearRegression())
 ])
 
-# Treinar o modelo
+# Dividindo os dados em treino e teste
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Treinando o modelo
 pipeline.fit(X_train, y_train)
 
-# Fazer previsões
+# Fazendo previsões
 y_pred = pipeline.predict(X_test)
 
-# Calcular o erro quadrático médio (MSE)
+# Avaliando o modelo
 mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)  # Raiz quadrada do MSE
 
-# Exibir resultados de forma mais interessante
-print("\n--- Resultados do Modelo ---")
-print(f"\nErro Quadrático Médio (MSE): {mse:.2f}\n")
+print(f"Erro Quadrático Médio (MSE): {mse:.2f}")
+print(f"Erro Médio Quadrático Médio (RMSE): {rmse:.2f}")
 
-# Exibir os dados reais e as previsões
-test_results = X_test.copy()
-test_results['Preço Real'] = y_test
-test_results['Preço Previsto'] = y_pred
 
-print("\nTabela de Resultados (dados reais e previsões):")
-print(test_results)
+# Comparação entre valores reais e previstos
+print("\nComparação entre valores reais e previstos:")
+previsoes_treino = pipeline.predict(X)
 
-# Exibir todos os dados com as previsões (treinamento + teste)
-all_data = X.copy()
-all_data['Preço Real'] = y
-all_data['Preço Previsto'] = pipeline.predict(X)
-print("\nTabela Completa com Previsões para Todos os Dados:")
-print(all_data)
+for combustivel, idade, km, preco_real, preco_previsto in zip(df["Combustivel"], df["Idade"], df["Quilometragem"], df["Preco"], previsoes_treino):
+    print(f"Carro {combustivel}, {idade} anos, {km} km → Preço real: R$ {preco_real:.2f} | Preço previsto: R$ {preco_previsto:.2f}")
 
-# Obter os coeficientes da regressão e a equação
-model = pipeline.named_steps['model']
-intercept = model.intercept_
-coefficients = model.coef_
-
-# Mostrar a equação de regressão
-categories = pipeline.named_steps['preprocessor'].transformers_[1][1].categories_[0]  # Categorias de 'Categoria'
-
-# Construindo a equação
-equation = f"Preço = {intercept:.2f} + "
-equation += f"{coefficients[0]:.2f} * Idade + {coefficients[1]:.2f} * Quilometragem + "
-for i, category in enumerate(categories):
-    equation += f"{coefficients[i+2]:.2f} * {category} + "  # Considerando o OneHotEncoder
-
-equation = equation.strip(' +')
-
-print("\nEquação de Regressão Linear:")
-print(equation)
-
-# Comparando três valores
-sample_data = pd.DataFrame({
-    'Categoria': ['Gasolina', 'Diesel', 'Etanol'],
-    'Idade': [4, 5, 6],
-    'Quilometragem': [60000, 70000, 80000]
+# Testando previsões com novos dados
+novos_dados = pd.DataFrame({
+    "Combustivel": ["Gasolina", "Diesel", "Etanol"],
+    "Idade": [4, 6, 2],
+    "Quilometragem": [45000, 70000, 15000]
 })
 
-# Fazer previsões para os valores amostrais
-sample_predictions = pipeline.predict(sample_data)
+previsoes_novos = pipeline.predict(novos_dados)
 
-# Exibir as comparações
-print("\nComparação de Preço para 3 valores de entrada:")
-
-for i, sample in sample_data.iterrows():
-    print(f"\nCategoria: {sample['Categoria']}, Idade: {sample['Idade']} anos, Quilometragem: {sample['Quilometragem']} km -> Preço Previsto: R${sample_predictions[i]:.2f}")
+print("\nPrevisões para novos carros:")
+for combustivel, idade, km, preco in zip(novos_dados["Combustivel"], novos_dados["Idade"], novos_dados["Quilometragem"], previsoes_novos):
+    print(f"Carro {combustivel}, {idade} anos, {km} km → Preço previsto: R$ {preco:.2f}")
